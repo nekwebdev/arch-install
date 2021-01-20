@@ -1,0 +1,21 @@
+# loadkeys fr-latin1
+# Ensure you run:
+# ansible-galaxy collection install community.general
+# Format your drives manually before running the playbook.
+# gdisk /dev/drive
+# codes: EFI ef00, swap 8200, root default (8320)
+---
+laptop: true
+hostname: "zephy"
+# localisation data
+timezone: "Pacific/Tahiti"
+locale: "en_US"
+locale_encoding: "UTF-8"
+keymap: "fr-latin1"
+# partition vars
+dual_boot: true
+format_boot: false
+boot: "sda1"
+swap: "sda2"
+root: "sda3"
+windows: "sda4"

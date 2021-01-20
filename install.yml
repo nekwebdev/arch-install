@@ -1,0 +1,276 @@
+---
+- name: "Install arch linux"
+  hosts: localhost
+  connection: local
+
+  vars_prompt:
+    - name: root_password
+      prompt: password for root
+      private: yes
+      confirm: yes
+
+  vars_files:
+    - "{{ playbook_dir }}/config.yml"
+
+  tasks:
+    - name: Abort if the host is not booted from the Arch install media
+      fail:
+        msg: "This host is not booted from the Arch install media!"
+      when: ansible_nodename != 'archiso'
+
+    - name: Synchronize clock via NTP
+      command: timedatectl set-ntp true
+
+    - name: Generate a mirrorlist, will take 5-15 minutes
+      command: reflector -c 'United States' -a 6 --sort rate --save /etc/pacman.d/mirrorlist
+      run_once: true
+
+    - name: Update pacman cache
+      community.general.pacman:
+        update_cache: yes
+        force: yes
+
+    - name: Install python-pexpect
+      community.general.pacman:
+        name: python-pexpect
+        state: present
+
+    - block:
+        - name: Create FAT32 filesystem in boot partition
+          community.general.filesystem:
+            dev: "/dev/{{ boot }}"
+            fstype: vfat
+            opts: -F32
+            force: no
+          when: format_boot | bool
+
+        - name: Create swap filesystem in swap partition
+          community.general.filesystem:
+            dev: "/dev/{{ swap }}"
+            fstype: swap
+            force: yes
+
+        - name: Create btrfs filesystem in root partition
+          community.general.filesystem:
+            dev: "/dev/{{ root }}"
+            fstype: btrfs
+            force: yes
+
+      run_once: true
+
+    - block:
+        - name: Mount swap
+          command: "swapon /dev/{{ swap }}"
+
+        - name: Mount root partition to /mnt
+          command: "mount /dev/{{ root }} /mnt"
+
+        - name: Create root btrfs subvolume
+          command: "btrfs su cr /mnt/{{ item }}"
+          with_items:
+            - "@"
+            - "@home"
+            - "@snapshots"
+            - "@var_log"
+
+        - name: Unmount /mnt
+          command: "umount /mnt"
+
+        - name: Mount root subvolume to /mnt
+          command: "mount -o noatime,compress=lzo,space_cache=v2,subvol=@ /dev/{{ root }} /mnt"
+
+        - name: Create the needed directories
+          file:
+            path: "/mnt{{ item }}"
+            state: directory
+            recurse: yes
+          with_items:
+            - "/boot"
+            - "/home"
+            - "/.snapshots"
+            - "/var/log"
+
+        - name: Mount remaining subvolumes
+          command: "mount -o noatime,compress=lzo,space_cache=v2,subvol={{ item.subvol }} /dev/{{ root }} /mnt{{ item.path }}"
+          with_items:
+            - { subvol: "@home", path: "/home" }
+            - { subvol: "@snapshots", path: "/.snapshots" }
+            - { subvol: "@var_log", path: "/var/log" }
+
+        - name: Mount boot partition
+          command: "mount /dev/{{ boot }} /mnt/boot"
+
+      run_once: true
+
+    - name: Get cpu flags
+      command: >
+        awk -F: '/^flags/ {print $2; exit}' /proc/cpuinfo
+      register: cpu_flags_cmd
+
+    # Extract the flags into a list variable named `cpu_flags`.
+    - name: Set cpu flags fact
+      set_fact:
+        cpu_flags: "{{ cpu_flags_cmd.stdout.split() }}"
+
+    # Identify the processor manufacturer by looking for "Intel" or "AMD"
+    # in `/proc/cpuinfo`.
+    - name: Check if Intel processor
+      command: grep -q Intel /proc/cpuinfo
+      ignore_errors: true
+      register: is_intel
+
+    - name: Check if AMD processor
+      command: grep -q AMD /proc/cpuinfo
+      ignore_errors: true
+      register: is_amd
+
+    - name: Pacstrap Arch Linux with intel ucode
+      command: "pacstrap /mnt base linux linux-firmware vim intel-ucode"
+      when: is_intel
+      run_once: true
+
+    - name: Pacstrap Arch Linux with amd ucode
+      command: "pacstrap /mnt base linux linux-firmware vim intel-ucode"
+      when: is_amd
+      run_once: true
+
+    - name: Print fstab info
+      command: genfstab -U /mnt
+      register: fstab_input
+
+    - name: Save fstab
+      blockinfile:
+        path: /mnt/etc/fstab
+        block: "{{ fstab_input.stdout }}"
+        state: present
+        create: yes
+
+    # config out of chroot
+    - name: Enable locale in the gen file
+      lineinfile:
+        path: /mnt/etc/locale.gen
+        regexp: "^{{ locale }}.{{ locale_encoding }} {{ locale_encoding }}"
+        line: "{{ locale }}.{{ locale_encoding }} {{ locale_encoding }}"
+        state: present
+        create: yes
+
+    - name: Save locale in the locale.conf
+      lineinfile:
+        path: /mnt/etc/locale.conf
+        regexp: "^LANG={{ locale }}.{{ locale_encoding }}"
+        line: "LANG={{ locale }}.{{ locale_encoding }}"
+        state: present
+        create: yes
+
+    - name: Save keyboard layout in the vconsole.conf
+      lineinfile:
+        path: /mnt/etc/vconsole.conf
+        regexp: "^KEYMAP={{ keymap }}"
+        line: "KEYMAP={{ keymap }}"
+        state: present
+        create: yes
+
+    - name: Set hostname
+      lineinfile:
+        path: /mnt/etc/hostname
+        regexp: "^{{ hostname }}"
+        line: "{{ hostname }}"
+        state: present
+        create: yes
+
+    - name: Set hosts
+      blockinfile:
+        path: /mnt/etc/hosts
+        block: |
+          127.0.0.1 localhost
+          ::1 localhost
+          127.0.1.1 {{ hostname }}.localdomain {{ hostname }}
+        state: present
+        create: yes
+
+    # arch-chroot
+    - name: Set local timezone
+      command: "arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime"
+      run_once: true
+
+    - name: Synchronize hardware clock
+      command: "arch-chroot /mnt hwclock --systohc"
+      run_once: true
+
+    - name: Generate locale
+      command: "arch-chroot /mnt locale-gen"
+      run_once: true
+
+    - name: "Change root password"
+      expect:
+        command: "arch-chroot /mnt passwd"
+        responses:
+          (.*)password(.*): "{{ root_password }}"
+          (.*)new password(.*): "{{ root_password }}"
+
+    - name: "Install packages in chroot"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion"
+      run_once: true
+
+    - name: "Install laptop power management"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
+      when: laptop | bool
+      run_once: true
+
+    # config out of chroot
+    - name: Add btrfs to mkinitcpio modules
+      lineinfile:
+        path: /mnt/etc/mkinitcpio.conf
+        regexp: "^MODULES=^"
+        line: "MODULES=(btrfs)"
+        state: present
+        create: yes
+
+    # arch-chroot
+    - name: Regenerate the image
+      command: "arch-chroot /mnt mkinitcpio -p linux"
+      run_once: true
+
+    - block:
+        - name: Create windows partition mount point
+          file:
+            path: "/mnt/mnt/windows"
+            state: directory
+
+        - name: Mount the windows partition
+          command: "arch-chroot /mnt mount /dev/{{ windows }} /mnt/windows"
+
+      when: dual_boot | bool
+      run_once: true
+
+    - name: Install grub in /boot
+      command: "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB"
+      run_once: true
+
+    - name: Create grub.cfg file
+      command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
+      run_once: true
+
+    - block:
+        - name: Unmount the windows partition
+          command: "arch-chroot /mnt umount /dev/{{ windows }}"
+          ignore_errors: yes
+
+        - name: Delete windows partition mount point
+          file:
+            path: "/mnt/mnt/windows"
+            state: absent
+
+      when: dual_boot | bool
+
+    - name: Enable services
+      command: "arch-chroot /mnt systemctl enable NetworkManager"
+
+    - name: "Enable laptop power management"
+      command: "arch-chroot /mnt systemctl enable tlp.service"
+      when: laptop | bool
+
+    - name: Clone the arch-config repo in root's home
+      git:
+        repo: https://github.com/nekwebdev/arch-config.git
+        dest: /mnt/root/arch-config
