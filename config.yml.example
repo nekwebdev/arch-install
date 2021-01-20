@@ -5,7 +5,7 @@
 # gdisk /dev/drive
 # codes: EFI ef00, swap 8200, root default (8320)
 ---
-laptop: true
+laptop: "y"
 hostname: "zephy"
 # localisation data
 timezone: "Pacific/Tahiti"
@@ -13,8 +13,8 @@ locale: "en_US"
 locale_encoding: "UTF-8"
 keymap: "fr-latin1"
 # partition vars
-dual_boot: true
-format_boot: false
+dual_boot: "y"
+format_boot: "n"
 boot: "sda1"
 swap: "sda2"
 root: "sda3"

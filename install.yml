@@ -42,7 +42,7 @@
             fstype: vfat
             opts: -F32
             force: no
-          when: format_boot | bool
+          when: format_boot == "y" or format_boot == "Y"
 
         - name: Create swap filesystem in swap partition
           community.general.filesystem:
@@ -214,7 +214,7 @@
 
     - name: "Install laptop power management"
       command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
-      when: laptop | bool
+      when: laptop == "y" or laptop == "Y"
       run_once: true
 
     # config out of chroot
@@ -240,7 +240,7 @@
         - name: Mount the windows partition
           command: "arch-chroot /mnt mount /dev/{{ windows }} /mnt/windows"
 
-      when: dual_boot | bool
+      when: dual_boot == "y" or dual_boot == "Y"
       run_once: true
 
     - name: Install grub in /boot
@@ -261,14 +261,14 @@
             path: "/mnt/mnt/windows"
             state: absent
 
-      when: dual_boot | bool
+      when: dual_boot == "y" or dual_boot == "Y"
 
     - name: Enable services
       command: "arch-chroot /mnt systemctl enable NetworkManager"
 
     - name: "Enable laptop power management"
       command: "arch-chroot /mnt systemctl enable tlp.service"
-      when: laptop | bool
+      when: laptop == "y" or laptop == "Y"
 
     - name: Clone the arch-config repo in root's home
       git:
