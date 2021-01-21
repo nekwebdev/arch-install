@@ -195,10 +195,14 @@
 
     # install base system packages
     - name: "Install packages in chroot"
-      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion ansible"
 
     - name: "Install laptop power management"
       command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
+      when: laptop == "y" or laptop == "Y"
+
+    - name: "Install ansible community.general collection"
+      command: "arch-chroot /mnt ansible-galaxy collection install community.general"
       when: laptop == "y" or laptop == "Y"
 
     # initramfs
