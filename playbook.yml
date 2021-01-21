@@ -262,4 +262,3 @@
       git:
         repo: https://github.com/nekwebdev/arch-config.git
         dest: /mnt/root/arch-config
-        version: main
