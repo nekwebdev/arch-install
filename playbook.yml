@@ -137,7 +137,6 @@
     # fstab
     - name: Generate fstab
       command: genfstab -U /mnt >> /mnt/etc/fstab
-      register: fstab_input
 
     # time zone
     - name: Set local timezone
@@ -202,7 +201,10 @@
       when: laptop == "y" or laptop == "Y"
 
     - name: "Install ansible community.general collection"
-      command: "arch-chroot /mnt ansible-galaxy collection install community.general"
+      command: "arch-chroot /mnt ansible-galaxy {{ item }}"
+      with_items:
+        - collection install community.general
+        - install kewlfft.aur
       when: laptop == "y" or laptop == "Y"
 
     # initramfs
