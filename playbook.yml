@@ -1,7 +1,6 @@
 ---
 - name: "Install arch linux"
   hosts: localhost
-  connection: local
 
   vars_prompt:
     - name: root_password
@@ -23,7 +22,6 @@
 
     - name: Generate a mirrorlist, will take 5-15 minutes
       command: reflector -c 'United States' -a 6 --sort rate --save /etc/pacman.d/mirrorlist
-      run_once: true
 
     - name: Update pacman cache
       community.general.pacman:
@@ -55,8 +53,6 @@
             dev: "/dev/{{ root }}"
             fstype: btrfs
             force: yes
-
-      run_once: true
 
     - block:
         - name: Mount swap
@@ -100,19 +96,17 @@
         - name: Mount boot partition
           command: "mount /dev/{{ boot }} /mnt/boot"
 
-      run_once: true
-
     - name: Get cpu flags
       command: >
         awk -F: '/^flags/ {print $2; exit}' /proc/cpuinfo
       register: cpu_flags_cmd
 
-    # Extract the flags into a list variable named `cpu_flags`.
+    # extract the flags into a list variable named `cpu_flags`.
     - name: Set cpu flags fact
       set_fact:
         cpu_flags: "{{ cpu_flags_cmd.stdout.split() }}"
 
-    # Identify the processor manufacturer by looking for "Intel" or "AMD"
+    # identify the processor manufacturer by looking for "Intel" or "AMD"
     # in `/proc/cpuinfo`.
     - name: Check if Intel processor
       command: grep -q Intel /proc/cpuinfo
@@ -125,28 +119,27 @@
       register: is_amd
 
     - name: Pacstrap Arch Linux with intel ucode
-      command: "pacstrap /mnt base linux linux-firmware vim intel-ucode"
+      command: "pacstrap /mnt base linux linux-firmware intel-ucode"
       when: is_intel
-      run_once: true
 
     - name: Pacstrap Arch Linux with amd ucode
-      command: "pacstrap /mnt base linux linux-firmware vim intel-ucode"
+      command: "pacstrap /mnt base linux linux-firmware intel-ucode"
       when: is_amd
-      run_once: true
 
-    - name: Print fstab info
-      command: genfstab -U /mnt
+    # fstab
+    - name: Generate fstab
+      command: genfstab -U /mnt >> /mnt/etc/fstab
       register: fstab_input
 
-    - name: Save fstab
-      blockinfile:
-        path: /mnt/etc/fstab
-        block: "{{ fstab_input.stdout }}"
-        state: present
-        create: yes
+    # time zone
+    - name: Set local timezone
+      command: "arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime"
 
-    # config out of chroot
-    - name: Enable locale in the gen file
+    - name: Synchronize hardware clock
+      command: "arch-chroot /mnt hwclock --systohc"
+
+    # localization
+    - name: "Enable {{ locale }}.{{ locale_encoding }} in /mnt/etc/locale.gen"
       lineinfile:
         path: /mnt/etc/locale.gen
         regexp: "^{{ locale }}.{{ locale_encoding }} {{ locale_encoding }}"
@@ -154,10 +147,13 @@
         state: present
         create: yes
 
-    - name: Save locale in the locale.conf
+    - name: Generate locale
+      command: "arch-chroot /mnt locale-gen"
+
+    - name: "Save {{ locale }}.{{ locale_encoding }} in locale.conf"
       lineinfile:
         path: /mnt/etc/locale.conf
-        regexp: "^LANG={{ locale }}.{{ locale_encoding }}"
+        regexp: "^LANG="
         line: "LANG={{ locale }}.{{ locale_encoding }}"
         state: present
         create: yes
@@ -165,11 +161,12 @@
     - name: Save keyboard layout in the vconsole.conf
       lineinfile:
         path: /mnt/etc/vconsole.conf
-        regexp: "^KEYMAP={{ keymap }}"
+        regexp: "^KEYMAP="
         line: "KEYMAP={{ keymap }}"
         state: present
         create: yes
 
+    # network configuration
     - name: Set hostname
       lineinfile:
         path: /mnt/etc/hostname
@@ -188,19 +185,27 @@
         state: present
         create: yes
 
-    # arch-chroot
-    - name: Set local timezone
-      command: "arch-chroot /mnt ln -sf /usr/share/zoneinfo/{{ timezone }} /etc/localtime"
-      run_once: true
+    # install base system packages
+    - name: "Install packages in chroot"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion"
 
-    - name: Synchronize hardware clock
-      command: "arch-chroot /mnt hwclock --systohc"
-      run_once: true
+    - name: "Install laptop power management"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
+      when: laptop == "y" or laptop == "Y"
 
-    - name: Generate locale
-      command: "arch-chroot /mnt locale-gen"
-      run_once: true
+    # initramfs
+    - name: Add btrfs to mkinitcpio modules
+      lineinfile:
+        path: /mnt/etc/mkinitcpio.conf
+        regexp: "^MODULES="
+        line: "MODULES=(btrfs)"
+        state: present
+        create: yes
 
+    - name: Regenerate the image
+      command: "arch-chroot /mnt mkinitcpio -P"
+
+    # root password
     - name: "Change root password"
       expect:
         command: "arch-chroot /mnt passwd"
@@ -208,48 +213,23 @@
           (.*)password(.*): "{{ root_password }}"
           (.*)new password(.*): "{{ root_password }}"
 
-    - name: "Install packages in chroot"
-      command: "arch-chroot /mnt pacman -Sy --noconfirm grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion"
-      run_once: true
-
-    - name: "Install laptop power management"
-      command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
-      when: laptop == "y" or laptop == "Y"
-      run_once: true
-
-    # config out of chroot
-    - name: Add btrfs to mkinitcpio modules
-      lineinfile:
-        path: /mnt/etc/mkinitcpio.conf
-        regexp: "^MODULES=^"
-        line: "MODULES=(btrfs)"
-        state: present
-        create: yes
-
-    # arch-chroot
-    - name: Regenerate the image
-      command: "arch-chroot /mnt mkinitcpio -p linux"
-      run_once: true
-
+    # boot loader
     - block:
         - name: Create windows partition mount point
           file:
             path: "/mnt/mnt/windows"
             state: directory
 
-        - name: Mount the windows partition
+        - name: Mount the windows partition for bootloader detection
           command: "arch-chroot /mnt mount /dev/{{ windows }} /mnt/windows"
 
       when: dual_boot == "y" or dual_boot == "Y"
-      run_once: true
 
     - name: Install grub in /boot
       command: "arch-chroot /mnt grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB"
-      run_once: true
 
     - name: Create grub.cfg file
       command: "arch-chroot /mnt grub-mkconfig -o /boot/grub/grub.cfg"
-      run_once: true
 
     - block:
         - name: Unmount the windows partition
@@ -274,3 +254,4 @@
       git:
         repo: https://github.com/nekwebdev/arch-config.git
         dest: /mnt/root/arch-config
+        version: main
