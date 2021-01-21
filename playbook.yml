@@ -118,12 +118,20 @@
       ignore_errors: true
       register: is_amd
 
+    - name: Delete any ucode from /mnt/boot
+      file:
+        path: "/mnt/boot/{{ item }}"
+        state: absent
+      with_items:
+        - intel-ucode.img
+        - amd-ucode.img
+
     - name: Pacstrap Arch Linux with intel ucode
       command: "pacstrap /mnt base linux linux-firmware intel-ucode"
       when: is_intel
 
     - name: Pacstrap Arch Linux with amd ucode
-      command: "pacstrap /mnt base linux linux-firmware intel-ucode"
+      command: "pacstrap /mnt base linux linux-firmware amd-ucode"
       when: is_amd
 
     # fstab
