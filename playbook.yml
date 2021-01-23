@@ -194,7 +194,7 @@
 
     # install base system packages
     - name: "Install packages in chroot"
-      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper xdg-utils xdg-user-dirs alsa-utils pulseaudio base-devel linux-headers bash-completion ansible"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper bluez bluez-utils xdg-utils xdg-user-dirs alsa-utils pulseaudio pulseaudio-bluetooth base-devel linux-headers bash-completion ansible lastpass-cli"
 
     - name: "Install laptop power management"
       command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
@@ -259,6 +259,9 @@
 
     - name: Enable services
       command: "arch-chroot /mnt systemctl enable NetworkManager"
+      with_items:
+        - NetworkManager
+        - bluetooth
 
     - name: "Enable laptop power management"
       command: "arch-chroot /mnt systemctl enable tlp.service"
