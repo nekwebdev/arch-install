@@ -1,6 +1,6 @@
 #!/bin/bash
 # Use the command below to run this script.
-# $ bash <(curl -sL https://bit.ly/arcsible)
+# $ bash <(curl -sL https://bit.ly/archnek)
 
 tput setaf 2
 echo
@@ -8,24 +8,30 @@ echo
 echo "###############################################################################"
 echo "##################  Installing Vanilla Archlinux from the iso "
 echo "###############################################################################"
-echo
 tput sgr0
-echo
-echo
 
 mount -o remount,size=4G /run/archiso/cowspace
 
 echo
-read -p "Is this a laptop? [y/n] " -n 1 laptop
+read -p "Is this a laptop? [Y/n] " -n 1 laptop
 echo
+if [[ ! $autoPartition =~ ^[Nn]$ ]]
+then
+  laptop="y"
+fi
+
 echo "System drives:"
 lsblk
 echo
-read -p "Installation drive device? sda, nvme0n1p, etc: " diskDevice
+read -p "Installation drive? [nvme0n1p/]: " diskDevice
 echo
+if [[ $diskDevice == "" ]]
+then
+  diskDevice="nvme0n1p"
+fi
 echo "Automatic partitioning will create a 300MB boot partition and a swap of your chosen file."
 echo "The rest of the disk will be used for the system."
-read -p "Do you want to auto configure partitions? [y/n] " -n 1 autoPartition
+read -p "Do you want to auto configure partitions? [y/N] " -n 1 autoPartition
 echo
 echo
 
@@ -36,8 +42,9 @@ then
   rootPart=3
   formatBoot="y"
   dualBoot="n"
-  windowsPart=0
+  windowsPart="0"
 else
+  autoPartition="n"
   cgdisk /dev/${diskDevice}
   tput setaf 3
   echo "###############################################################################"
@@ -48,25 +55,44 @@ else
   echo "System drives:"
   lsblk
   echo
-  read -p "Boot partition number? " bootPart
+  read -p "Boot partition number? [1/] " bootPart
   echo
-  read -p "Swap partition number? " swapPart
-  echo
-  read -p "Root partition number? " rootPart
-  echo
-  read -p "Dual booting windows? [y/n] " -n 1 dualBoot
-  echo
-  echo
-  if [[ $dualBoot =~ ^[Yy]$ ]]
+  if [[ $bootPart == "" ]]
   then
-    formatBoot="n"
-    read -p "Windows partition number? " windowsPart
+    bootPart="1"
+  fi
+  read -p "Swap partition number? [5/] " swapPart
+  echo
+  if [[ $swapPart == "" ]]
+  then
+    swapPart="5"
+  fi
+  read -p "Root partition number? [6/] " rootPart
+  echo
+  if [[ $rootPart == "" ]]
+  then
+    rootPart="6"
+  fi
+  read -p "Dual booting windows? [Y/n] " -n 1 dualBoot
+  echo
+  if [[ $dualBoot =~ ^[Nn]$ ]]
+  then
+    windowsPart="0"
+    read -p "Format boot partition? [Y/n] " -n 1 formatBoot
     echo
+    if [[ ! $formatBoot =~ ^[Nn]$ ]]
+    then
+      formatBoot="y"
+    fi
   else
-    windowsPart=0
-    read -p "Format boot partition? [y/n] " -n 1 formatBoot
+    dualBoot="y"
+    formatBoot="n"
+    read -p "Windows partition number? [3/] " windowsPart
     echo
-    echo
+    if [[ $windowsPart == "" ]]
+    then
+      windowsPart="3"
+    fi
   fi
 fi
 
@@ -151,13 +177,6 @@ pacman -Syy --noconfirm vim git ansible
 ansible-galaxy collection install community.general
 
 git clone git://github.com/nekwebdev/arch-install
-
-tput setaf 3
-echo "###############################################################################"
-echo "##################  Configuring ansible "
-echo "###############################################################################"
-echo
-tput sgr0
 
 cd arch-install
 cat > config.yml << EOF
