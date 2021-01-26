@@ -192,9 +192,17 @@
         state: present
         create: yes
 
+    # root password
+    - name: "Change root password"
+      expect:
+        command: "arch-chroot /mnt passwd"
+        responses:
+          (.*)password(.*): "{{ root_password }}"
+          (.*)new password(.*): "{{ root_password }}"
+
     # install base system packages
     - name: "Install packages in chroot"
-      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper bluez bluez-utils xdg-utils xdg-user-dirs alsa-utils pulseaudio pulseaudio-bluetooth base-devel linux-headers bash-completion ansible lastpass-cli"
+      command: "arch-chroot /mnt pacman -Sy --noconfirm vim grub efibootmgr networkmanager network-manager-applet dialog wpa_supplicant inetutils mtools dosfstools os-prober ntfs-3g git reflector snapper bluez bluez-utils xdg-utils xdg-user-dirs alsa-utils pulseaudio pulseaudio-bluetooth base-devel linux-headers bash-completion ansible python-pexpect"
 
     - name: "Install laptop power management"
       command: "arch-chroot /mnt pacman -Sy --noconfirm tlp"
@@ -204,7 +212,7 @@
       command: "arch-chroot /mnt ansible-galaxy {{ item }}"
       with_items:
         - collection install community.general
-        - install kewlfft.aur
+        # - install kewlfft.aur
       when: laptop == "y" or laptop == "Y"
 
     # initramfs
@@ -216,16 +224,16 @@
         state: present
         create: yes
 
+    - name: Remove fdisk from mkinitcpio hooks
+      lineinfile:
+        path: /mnt/etc/mkinitcpio.conf
+        regexp: "^HOOKS="
+        line: "HOOKS=(base udev autodetect modconf block filesystems keyboard)"
+        state: present
+        create: yes
+
     - name: Regenerate the image
       command: "arch-chroot /mnt mkinitcpio -P"
-
-    # root password
-    - name: "Change root password"
-      expect:
-        command: "arch-chroot /mnt passwd"
-        responses:
-          (.*)password(.*): "{{ root_password }}"
-          (.*)new password(.*): "{{ root_password }}"
 
     # boot loader
     - block:
