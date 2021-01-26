@@ -9,7 +9,7 @@ Load your keyboard layout `loadkeys fr-latin1`
 Get online.
 Use this command to download the `00-installarch.sh` script to setup the dependencies, clone this project and start the install:
 
-`bash <(curl -sL https://bit.ly/acrsible)`
+`bash <(curl -sL https://bit.ly/nekarch)`
 
 ## Configuration
 
