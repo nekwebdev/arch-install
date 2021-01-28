@@ -128,11 +128,11 @@
 
     - name: Pacstrap Arch Linux with intel ucode
       command: "pacstrap /mnt base linux linux-firmware intel-ucode"
-      when: is_intel
+      when: not is_intel.failed | bool
 
     - name: Pacstrap Arch Linux with amd ucode
       command: "pacstrap /mnt base linux linux-firmware amd-ucode"
-      when: is_amd
+      when: not is_amd.failed | bool
 
     # fstab
     - name: Generate fstab
@@ -215,6 +215,24 @@
         # - install kewlfft.aur
       when: laptop == "y" or laptop == "Y"
 
+    - name: Create local ansible modules folder
+      file:
+        path: "/mnt/root/.ansible/plugins/modules"
+        state: directory
+
+    - name: Create local ansible tmp folder
+      file:
+        path: "/mnt/root/.ansible/tmp"
+        state: directory
+        mode: "0700"
+
+    - name: Clone ansible-aur
+      git:
+        repo: https://github.com/kewlfft/ansible-aur.git
+        dest: "/mnt/root/.ansible/plugins/modules/aur"
+        accept_hostkey: yes
+        update: no
+
     # initramfs
     - name: Add btrfs to mkinitcpio modules
       lineinfile:
@@ -266,7 +284,7 @@
       when: dual_boot == "y" or dual_boot == "Y"
 
     - name: Enable services
-      command: "arch-chroot /mnt systemctl enable NetworkManager"
+      command: "arch-chroot /mnt systemctl enable {{ item }}"
       with_items:
         - NetworkManager
         - bluetooth

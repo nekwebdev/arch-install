@@ -23,11 +23,11 @@ fi
 echo "System drives:"
 lsblk
 echo
-read -p "Installation drive? [nvme0n1p/]: " diskDevice
+read -p "Installation drive? [nvme0n1/]: " diskDevice
 echo
 if [[ $diskDevice == "" ]]
 then
-  diskDevice="nvme0n1p"
+  diskDevice="nvme0n1"
 fi
 echo "Automatic partitioning will create a 300MB boot partition and a swap of your chosen file."
 echo "The rest of the disk will be used for the system."
@@ -95,7 +95,11 @@ else
     fi
   fi
 fi
-
+# Add the p for display
+if [[ $diskDevice = *nvme* ]]
+then
+  diskDevice="${diskDevice}p"
+fi
 tput setaf 2
 echo "###############################################################################"
 echo "##################  Confirm settings "
@@ -137,7 +141,11 @@ then
   echo "###############################################################################"
   echo
   tput sgr0
-
+  # strip the p again
+  if [[ $diskDevice = *nvme* ]]
+  then
+    diskDevice=${diskDevice%?}
+  fi
   read -p "Swap size? 500M, 2G, 4G, etc " swapSize
   sed -e 's/\s*\([\+0-9a-zA-Z]*\).*/\1/' << EOF | gdisk /dev/${diskDevice}
   o # create new empty GUID partition table
@@ -160,6 +168,11 @@ then
   w # write changes
   Y # confirm changes
 EOF
+  # Add the p for save in config
+  if [[ $diskDevice = *nvme* ]]
+  then
+    diskDevice="${diskDevice}p"
+  fi
 fi
 
 echo
