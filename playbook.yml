@@ -253,6 +253,21 @@
     - name: Regenerate the image
       command: "arch-chroot /mnt mkinitcpio -P"
 
+    - name: Enable services
+      command: "arch-chroot /mnt systemctl enable {{ item }}"
+      with_items:
+        - NetworkManager
+        - bluetooth
+
+    - name: "Enable laptop power management"
+      command: "arch-chroot /mnt systemctl enable tlp.service"
+      when: laptop == "y" or laptop == "Y"
+
+    - name: Clone the arch-config repo in root's home
+      git:
+        repo: https://github.com/nekwebdev/arch-config.git
+        dest: /mnt/root/arch-config
+
     # boot loader
     - block:
         - name: Create windows partition mount point
@@ -282,18 +297,3 @@
             state: absent
 
       when: dual_boot == "y" or dual_boot == "Y"
-
-    - name: Enable services
-      command: "arch-chroot /mnt systemctl enable {{ item }}"
-      with_items:
-        - NetworkManager
-        - bluetooth
-
-    - name: "Enable laptop power management"
-      command: "arch-chroot /mnt systemctl enable tlp.service"
-      when: laptop == "y" or laptop == "Y"
-
-    - name: Clone the arch-config repo in root's home
-      git:
-        repo: https://github.com/nekwebdev/arch-config.git
-        dest: /mnt/root/arch-config
