@@ -47,6 +47,7 @@
             dev: "/dev/{{ swap }}"
             fstype: swap
             force: yes
+          when: swap is defined
 
         - name: Create btrfs filesystem in root partition
           community.general.filesystem:
@@ -57,6 +58,7 @@
     - block:
         - name: Mount swap
           command: "swapon /dev/{{ swap }}"
+          when: swap is defined
 
         - name: Mount root partition to /mnt
           command: "mount /dev/{{ root }} /mnt"
